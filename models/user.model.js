@@ -1,6 +1,7 @@
 const mongoose = require("mongoose");
 require("../db/conn");
 const bcrypt = require("bcrypt");
+const { ObjectId } = mongoose.Schema.Types;
 
 const userSchema = mongoose.Schema(
   {
@@ -8,12 +9,12 @@ const userSchema = mongoose.Schema(
       type: String,
       require: true,
     },
-    email_id: {
+    email: {
       type: String,
       require: true,
       unique: true,
     },
-    user_name: {
+    username: {
       type: String,
       require: true,
       unique: true,
@@ -22,7 +23,7 @@ const userSchema = mongoose.Schema(
       type: String,
       require: true,
     },
-    phone: {
+    mobile: {
       type: Number,
       require: true,
     },
@@ -30,7 +31,9 @@ const userSchema = mongoose.Schema(
       type: String,
       require: true,
     },
-    
+    privacy: { type: String, default: "public" },
+    followers: [{ type: ObjectId, ref: "User" }],
+    following: [{ type: ObjectId, ref: "User" }],
   },
   {
     timestamps: true,

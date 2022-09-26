@@ -1,52 +1,79 @@
-const User = require("../models/user.model");
 const jwt = require("jsonwebtoken");
-const bcrypt = require("bcrypt");
+const User = require("../models/user.model");
+const Post = require("../models/post.models");
 const dotenv = require("dotenv");
-const axios = require("axios");
+const bcrypt = require("bcrypt");
 dotenv.config("../.env");
+const fs = require("fs");
 const path = require("path");
+const savedStoryPath = path.join(__dirname, "../img/post");
 
-const getUser = async (req, res) => {
+function isEmail(email) {
+  var emailFormat = /^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$/;
+  if (email !== "" && email.match(emailFormat)) {
+    return true;
+  }
+  return false;
+}
+
+function isPassword(password) {
+  var passwordFormat = /^(?=.*\d)(?=.*[!@#$%^&*])(?=.*[a-z])(?=.*[A-Z]).{8,}$/;
+  if (password !== "" && password.match(passwordFormat)) {
+    return true;
+  }
+  return false;
+}
+
+const getToken = (headerToken) => {
   try {
-    const getUserDetail = await User.findById({ _id: req.user.id }).select(
-      "-password"
-    );
-    res.json({ userDetail: getUserDetail }); //returns all user details
+    let token = headerToken;
+    token = token.split("Bearer ")[1];
+    let decoded = jwt.decode(token);
+    return decoded.id;
   } catch (err) {
     console.log(err);
   }
 };
 
 const addUser = async (req, res) => {
+  console.log(req.body);
   try {
-    const userEmail = await User.findOne({ email: req.body.email }); // checking email is alreday taken or not
-    if (userEmail) {
-      res.json({ message: "Email is already Registerd.." });
+    if (
+      req.body.name !== "" &&
+      req.body.username !== "" &&
+      req.body.mobile !== "" &&
+      req.body.gender !== ""
+    ) {
+      if (isEmail(req.body.email)) {
+        if (isPassword(req.body.password)) {
+          const checkUser = await User.findOne({ username: req.body.username });
+          if (checkUser) {
+            res.json({ message: "username is already taken" });
+          } else {
+            const data = new User(req.body);
+            const response = await data.save();
+            res.status(201).json({
+              message: "Registration Done",
+              _id: response._id,
+              userName: response.username,
+              name: response.name,
+              email: response.email,
+            });
+          }
+        } else {
+          res.json({
+            message:
+              "Password Must be minimum 8 letters and at least a symbol, upper and lower case letters and a number",
+          });
+        }
+      } else {
+        res.json({
+          message: "Enter Proper Email..",
+        });
+      }
     } else {
-      const userData = {
-        fullname: req.body.fullname,
-        email: req.body.email,
-        password: req.body.password,
-        phone: req.body.phone,
-        gender: req.body.gender,
-        profilepic: {
-          data: "https://drive.google.com/file/d/1OiX69mNDf7KH_jMXepcjjgXi5jsmLQAM/view?usp=sharing",
-          contentType: "image/jpeg",
-        },
-      };
-      const data = new User(userData);
-      const response = await data.save(); //save data into db
       res.json({
-        message: "Registration Done",
-        _id: response._id,
-        user: {
-          id: response._id,
-          fullname: response.fullname,
-          email: response.email,
-          phone: response.phone,
-          gender: response.gender,
-          profilepic: response.profilepic.data.toString(),
-        },
+        message: "Enter Proper Credentials..",
       });
     }
   } catch (error) {
@@ -56,44 +83,54 @@ const addUser = async (req, res) => {
 
 const loginUser = async (req, res) => {
   try {
-    const userEmail = await User.findOne({ email: req.body.email }); //verifing email
-    // console.log(userEmail);
-    if (userEmail) {
-      let matchPassword = await bcrypt.compare(
-        //hashing password
-        req.body.password,
-        userEmail.password
-      );
-      if (matchPassword) {
-        let Token = jwt.sign(
-          {
-            id: userEmail._id,
-            fullname: userEmail.fullname,
-            email: userEmail.email,
-          },
-          process.env.ACCESS_TOKEN_SECRET_KEY,
-          {
-            expiresIn: "2h", //token expires in 2 hours
-          }
+    if (req.body.username !== "" && req.body.password !== "") {
+      const checkUser = await User.findOne({ username: req.body.username });
+      console.log(checkUser);
+      if (checkUser) {
+        let matchPassword = await bcrypt.compare(
+          req.body.password,
+          checkUser.password
         );
-        return res.status(201).json({
-          message: "Login Successfull",
-          userToken: Token,
-          user: {
-            id: userEmail._id,
-            fullname: userEmail.fullname,
-            email: userEmail.email,
-            phone: userEmail.phone,
-            gender: userEmail.gender,
-            profilepic: userEmail.profilepic.data.toString(),
-          },
-        });
+        if (matchPassword) {
+          let Token = jwt.sign(
+            {
+              username: checkUser.username,
+              id: checkUser._id,
+              email: checkUser.email,
+            },
+            process.env.ACCESS_TOKEN_SECRET_kEY,
+            {
+              expiresIn: "1d", // 900s - 15 Min || 1800s - 30 Min
+            }
+          );
+          return res.status(201).json({
+            message: "Login Successful",
+            userToken: Token,
+            User: checkUser.username,
+          });
+        } else {
+          return res.json({ message: "Invalid Password" });
+        }
       } else {
-        return res.json({ message: "Invalid Password" });
+        res.status(404).json({ message: "User is not Registered" });
       }
     } else {
-      res.status(301).json({ message: "User is not Registered" });
+      res.json({
+        message: "Enter Proper Credentials..",
+      });
     }
+  } catch (err) {
+    console.log(err);
+  }
+};
+
+const getUser = async (req, res) => {
+  try {
+    let tokenId = getToken(req.headers.authorization);
+    const getUserDetail = await User.findById({ _id: tokenId }).select(
+      "-password"
+    );
+    res.json({ userDetail: getUserDetail });
   } catch (err) {
     console.log(err);
   }
@@ -101,70 +138,263 @@ const loginUser = async (req, res) => {
 
 const updateUser = async (req, res) => {
   try {
-    // Checking profile picture of user
-    const getProfileImg = await User.findById({ _id: req.user.id }).select(
-      "profilepic"
+    let tokenId = getToken(req.headers.authorization);
+    const getUserDetail = await User.findById({ _id: tokenId }).select(
+      "-password"
     );
-    // console.log(      `this is converted to string ${getProfileImg.profilepic.data.toString()}`    );
+    if (!getUserDetail)
+      return res.status(404).json("The User with the given ID was not found.");
+    const updateUserDetail = await User.findByIdAndUpdate(tokenId, req.body, {
+      new: true,
+    }).select("-password");
+    res.json({
+      message: "User updated successful",
+      updated: updateUserDetail,
+    });
+  } catch (err) {
+    console.log(err);
+  }
+};
 
-    let imgData = getProfileImg.profilepic.data;
-    let imgContent = getProfileImg.profilepic.contentType;
+const deleteUser = async (req, res) => {
+  try {
+    let tokenId = getToken(req.headers.authorization);
+    const getUserDetail = await User.findById({ _id: tokenId }).select(
+      "-password"
+    );
+    if (!getUserDetail)
+      return res
+        .status(404)
+        .json({ message: "The User with the given ID was not found." });
+    const deletedUserDetail = await User.findByIdAndDelete({ _id: tokenId });
+    res.json({
+      message: "User deleted successful",
+      deleted: deletedUserDetail,
+    });
+  } catch (err) {
+    console.log(err);
+  }
+};
 
-    //in db profilepicture is unavaliable
-    if (req.file === undefined) {
-      // console.log("if undefined file");
-      imgData;
-      imgContent;
-    } else {
-      // console.log("if file is available");
-      imgData = req.file.filename;
-      imgContent = req.file.mimetype;
-    }
-    // console.log(`${imgData} -- ${imgContent}`);
-
-    const {
-      fullname,
-      //email,
-      // password,
-      phone,
-      gender,
-      goal,
-      height,
-      weight,
-      age,
-      neck,
-      waist,
-      hip,
-      activityLevel,
-    } = req.body;
-    const obj = {
-      fullname,
-      // email,
-      //password,
-      phone,
-      gender,
-      goal,
-      height,
-      weight,
-      age,
-      neck,
-      waist,
-      hip,
-      activityLevel,
-      profilepic: { data: imgData, contentType: imgContent },
-    };
-    // console.log(obj);
+const follow = async (req, res) => {
+  try {
+    let tokenId = getToken(req.headers.authorization);
+    const { profileId } = req.body;
     try {
-      const updateUserDetail = await User.updateOne({ _id: req.user.id }, obj);
-      // console.log(updateUserDetail);
-      res.status(201).json({
-        message: "User Updated Successfully. ✔✌",
-        updateUserDetail: updateUserDetail,
-      });
+      const checkFollowId = await User.findById({ _id: tokenId }).select(
+        "following"
+      );
+      let followingList = checkFollowId.following;
+      console.log(followingList);
+      const checkProfileId = followingList.find((elm) => elm == profileId);
+      console.log(`this is find element from array ${checkProfileId}`);
+
+      if (checkProfileId) {
+        // console.log(`this is in if Condition ${checkProfileId}||${profileId}`);
+
+        console.log(`you are already following this user`);
+        res.json({
+          message: `you are already following this user ${profileId}`,
+        });
+      } else {
+        let updateFollowing = await User.findOneAndUpdate(
+          { _id: tokenId },
+          { $push: { following: profileId } }
+        );
+
+        let updateFollowers = await User.findOneAndUpdate(
+          { _id: profileId },
+          { $push: { followers: tokenId } }
+        );
+
+        res.json({
+          message: `following to ${profileId}`,
+          following: updateFollowing._id,
+          followers: updateFollowers._id,
+        });
+      }
     } catch (error) {
       console.log(error);
+    }
+  } catch (err) {
+    console.log(err);
+  }
+};
+
+const unfollow = async (req, res) => {
+  try {
+    let tokenId = getToken(req.headers.authorization);
+    const { profileId } = req.body;
+    const checkFollowId = await User.findById({ _id: tokenId }).select(
+      "following"
+    );
+    let followingList = checkFollowId.following;
+    console.log(followingList);
+    const checkProfileId = followingList.find((elm) => elm == profileId);
+    // console.log(`this is find element from array ${checkProfileId}`);
+    if (checkProfileId) {
+      let updateUnfollwing = await User.findOneAndUpdate(
+        { _id: tokenId },
+        { $pull: { following: profileId } }
+      );
       res.json({
-        message: error,
+        message: `Unfollow to ${profileId}`,
+        following: updateUnfollwing,
+      });
+    } else {
+      res.json({
+        message: `You are not following to ${profileId} user, So you can't click on unfollow.`,
+        // following: updateUnfollwing,
+      });
+    }
+  } catch (error) {
+    console.log(error);
+  }
+};
+
+const addPost = async (req, res) => {
+  try {
+    let tokenId = getToken(req.headers.authorization);
+    // console.log(`decoded: ${decoded.id}`);
+    let postFileName, postContent, postText;
+    if (req.file === undefined) {
+      return res.json({ message: "Something went wrong." });
+    } else {
+      postFileName = req.file.filename;
+      postContent = req.file.mimetype;
+      postText = req.body.posttext;
+    }
+    const obj = {
+      text: postText,
+      post: { data: postFileName, contentType: postContent },
+      user: tokenId,
+    };
+    try {
+      const postData = new Post(obj);
+      const response = await postData.save();
+      console.log(`response ${response}`);
+      // res.send("upload")
+      res.status(200).json({ message: "post Uploaded", response: response });
+    } catch (error) {
+      console.log(error);
+    }
+  } catch (err) {
+    console.log(err);
+  }
+};
+
+const likePost = async (req, res) => {
+  try {
+    let tokenId = getToken(req.headers.authorization);
+    const { postId } = req.body;
+    try {
+      const checkLikeId = await Post.findById({ _id: postId }).select("like");
+      let likeList = checkLikeId.like;
+      console.log(likeList);
+      const checkProfileId = likeList.find((elm) => elm == tokenId);
+      if (checkProfileId) {
+        console.log(`this is find element from array ${checkProfileId}`);
+        console.log(`you are already liked this POST`);
+        res.json({
+          message: `you are already liked this POST ${postId}`,
+        });
+      } else {
+        let updateLike = await Post.findOneAndUpdate(
+          { _id: postId },
+          { $push: { like: tokenId } }
+        );
+
+        res.json({
+          message: `like to ${postId}`,
+          like: updateLike._id,
+        });
+      }
+    } catch (error) {
+      console.log(error);
+    }
+  } catch (err) {
+    console.log(err);
+  }
+};
+
+const dislikePost = async (req, res) => {
+  try {
+    let tokenId = getToken(req.headers.authorization);
+    const { postId } = req.body;
+    try {
+      const checkLikeId = await Post.findById({ _id: postId }).select("like");
+      let likeList = checkLikeId.like;
+      console.log(likeList);
+      const checkProfileId = likeList.find((elm) => elm == tokenId);
+      if (checkProfileId) {
+        let updateLike = await Post.findOneAndUpdate(
+          { _id: postId },
+          { $pull: { like: tokenId } }
+        );
+        res.json({
+          message: `dislike to ${postId}`,
+          like: updateLike.like,
+        });
+      } else {
+        console.log(`this is find element from array ${checkProfileId}`);
+        console.log(`you are already Unliked this POST`);
+        res.json({
+          message: `you are already Un liked this POST ${postId}`,
+        });
+      }
+    } catch (error) {
+      console.log(error);
+    }
+  } catch (err) {
+    console.log(err);
+  }
+};
+
+const updatePost = async (req, res) => {
+  try {
+    const { postId } = req.body;
+    let tokenId = getToken(req.headers.authorization);
+    const getPostDetail = await Post.findById({ _id: postId });
+    console.log(getPostDetail);
+    if (!getPostDetail)
+      return res.status(404).json("The Post with the given ID was not found.");
+    const updatePostDetail = await Post.findByIdAndUpdate(postId, req.body, {
+      new: true,
+    });
+    res.json({
+      message: "Post updated successful",
+      updated: updatePostDetail,
+    });
+  } catch (err) {
+    console.log(err);
+  }
+};
+
+const deletePost = async (req, res) => {
+  try {
+    let tokenId = getToken(req.headers.authorization);
+    const { postId } = req.body;
+    const getPostDetail = await Post.findById({ _id: postId });
+    if (!getPostDetail) {
+      return res
+        .status(404)
+        .json({ message: "The Post with the given ID was not found." });
+    } else {
+      fileName = getPostDetail.post.data.toString();
+      fs.unlink(
+        `${savedStoryPath}/${getPostDetail.user}/${fileName}`,
+        (err) => {
+          if (err) throw err;
+          // if no error, file has been deleted successfully
+          console.log(
+            `${savedStoryPath}/${getPostDetail.user}/${fileName} File deleted!`
+          );
+        }
+      );
+      const deletedPost = await Post.findByIdAndDelete({ _id: postId });
+      res.json({
+        message: "Post deleted successful",
+        deleted: deletedPost,
       });
     }
   } catch (err) {
@@ -172,160 +402,37 @@ const updateUser = async (req, res) => {
   }
 };
 
-const getDashboard = async (req, res) => {
-  let idealWeightOfUser, bmiOfUser, bodyFatOfUser;
-  const Nodata = { message: "No Data.." };
-
+const getPosts = async (req, res) => {
   try {
-    const getUserDetail = await User.findById({ _id: req.user.id }).select(
-      "-password"
-    );
-
-    // motivational quotes
-    const quotes = {
-      method: "POST",
-      url: "https://motivational-quotes1.p.rapidapi.com/motivation",
-      headers: {
-        "content-type": "application/json",
-        "X-RapidAPI-Host": "motivational-quotes1.p.rapidapi.com",
-        "X-RapidAPI-Key": "56d21850d0msh562e0fff5e3f167p167d1cjsnf6ba583a1812",
-      },
-      data: '{"key1":"value","key2":"value"}',
-    };
-    //fetching from api
-    motivationalQuote = await axios.request(quotes);
-    // console.log(motivationalQuote.data);
-
-    // // checkig purpuse
-    // console.log(`${getUserDetail.height}
-    //   ${getUserDetail.weight}
-    //   ${getUserDetail.goal}
-    //   ${getUserDetail.age}
-    //   ${getUserDetail.hip}
-    //   ${getUserDetail.neck}
-    //   ${getUserDetail.waist}
-    //   ${getUserDetail.activity}`);
-
-    // idealWeight
-    if (getUserDetail.height && getUserDetail.gender) {
-      const idealWeight = {
-        method: "GET",
-        url: "https://fitness-calculator.p.rapidapi.com/idealweight",
-        params: { gender: getUserDetail.gender, height: getUserDetail.height },
-        headers: {
-          "X-RapidAPI-Host": "fitness-calculator.p.rapidapi.com",
-          "X-RapidAPI-Key":
-            "56d21850d0msh562e0fff5e3f167p167d1cjsnf6ba583a1812",
-        },
+    const pageNumber = parseInt(req.query.pageNumber) || 0;
+    const limit = parseInt(req.query.limit) || 10;
+    const result = {};
+    const totalPosts = await Post.countDocuments().exec();
+    let startIndex = pageNumber * limit;
+    const endIndex = (pageNumber + 1) * limit;
+    result.totalPosts = totalPosts;
+    if (startIndex > 0) {
+      result.previous = {
+        pageNumber: pageNumber - 1,
+        limit: limit,
       };
-      //fetching from api
-      idealWeightOfUser = await axios.request(idealWeight);
-      // console.log(idealWeightOfUser.data.data);
     }
-
-    // Bmi
-    if (getUserDetail.height && getUserDetail.weight && getUserDetail.age) {
-      const bmi = {
-        method: "GET",
-        url: "https://fitness-calculator.p.rapidapi.com/bmi",
-        params: {
-          age: getUserDetail.age,
-          weight: getUserDetail.weight,
-          height: getUserDetail.height,
-        },
-        headers: {
-          "X-RapidAPI-Host": "fitness-calculator.p.rapidapi.com",
-          "X-RapidAPI-Key":
-            "56d21850d0msh562e0fff5e3f167p167d1cjsnf6ba583a1812",
-        },
+    if (endIndex < (await Post.countDocuments().exec())) {
+      result.next = {
+        pageNumber: pageNumber + 1,
+        limit: limit,
       };
-      //fetching from api
-      bmiOfUser = await axios.request(bmi);
-      // console.log(bmiOfUser.data.data);
     }
-
-    // body fat percentage
-    if (
-      getUserDetail.height &&
-      getUserDetail.weight &&
-      getUserDetail.gender &&
-      getUserDetail.age &&
-      getUserDetail.hip &&
-      getUserDetail.neck &&
-      getUserDetail.waist
-    ) {
-      const bodyFat = {
-        url: "https://fitness-calculator.p.rapidapi.com/bodyfat",
-        params: {
-          age: getUserDetail.age,
-          gender: getUserDetail.gender,
-          weight: getUserDetail.weight,
-          height: getUserDetail.height,
-          neck: getUserDetail.neck,
-          waist: getUserDetail.waist,
-          hip: getUserDetail.hip,
-        }, //fetching details from DB
-        headers: {
-          "X-RapidAPI-Host": "fitness-calculator.p.rapidapi.com",
-          "X-RapidAPI-Key":
-            "56d21850d0msh562e0fff5e3f167p167d1cjsnf6ba583a1812",
-        },
-      };
-      bodyFatOfUser = await axios.request(bodyFat);
-      // console.log(bodyFatOfUser.data.data);
-    }
-
-    if (!idealWeightOfUser && !bmiOfUser && !bodyFatOfUser) {
-      return res.json({
-        quote: motivationalQuote.data,
-        user: getUserDetail,
-        message: "Please fill your data..",
-      });
-    }
-    res.json({
-      quote: motivationalQuote.data,
-      user: getUserDetail,
-      idealWeightOfUser: idealWeightOfUser
-        ? idealWeightOfUser.data.data
-        : Nodata,
-      bmiOfUser: bmiOfUser ? bmiOfUser.data.data : Nodata,
-      bodyFatOfUser: bodyFatOfUser ? bodyFatOfUser.data.data : Nodata,
-    }); //returns all details of user,idealweight,bmi,bodyfat
+    result.data = await Post.find()
+      .sort("-_id")
+      .skip(startIndex)
+      .limit(limit)
+      .exec();
+    result.rowsPerPage = limit;
+    return res.json({ msg: "Posts Fetched successfully", data: result });
   } catch (error) {
     console.log(error);
-  }
-};
-
-const changePassword = async (req, res) => {
-  try {
-    const getUserDetail = await User.findById({ _id: req.user.id }).select(
-      "password"
-    );
-    console.log(getUserDetail);
-    const oldPassword = req.body.oldPassword;
-    console.log(oldPassword);
-    const matchPassword = await bcrypt.compare(
-      //hashing password
-      req.body.oldPassword,
-      getUserDetail.password
-    );
-    if (matchPassword) {
-      const newPassword = await bcrypt.hash(req.body.newPassword, 12);
-
-      const updatedPassword = await User.updateOne(
-        { _id: req.user.id },
-        { password: newPassword }
-      );
-      // console.log(updatedPassword);
-      res.json({
-        message: "Password Updated Successfully",
-        status: updatedPassword,
-      });
-    } else {
-      res.json({ message: "Password doesn't match" });
-    }
-  } catch (error) {
-    console.log(error);
+    return res.status(500).json({ msg: "Sorry, something went wrong" });
   }
 };
 
@@ -334,6 +441,13 @@ module.exports = {
   addUser,
   loginUser,
   updateUser,
-  getDashboard,
-  changePassword,
+  deleteUser,
+  follow,
+  unfollow,
+  addPost,
+  likePost,
+  dislikePost,
+  updatePost,
+  deletePost,
+  getPosts,
 };

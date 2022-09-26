@@ -1,30 +1,67 @@
 const express = require("express");
 const router = express.Router();
 const userController = require("../controllers/user.controller");
-const { authorization } = require("../middlewares/auth.middleware");
-const { uploadProfile } = require("../middlewares/global.middleware");
+const authorization = require("../middlewares/auth.middleware");
 
-// add user route i.e. SignUp
 router.post("/userAdd", userController.addUser);
 
-//Login user route
 router.post("/userLogin", userController.loginUser);
 
-//get user detail route
-router.get("/userGet", authorization, userController.getUser);
+router.get("/userDetail", authorization.authorization, userController.getUser);
 
-//update user details route
-router.post(
+router.patch(
   "/userUpdate",
-  authorization,
-  uploadProfile.single("profilepic"),
+  authorization.authorization,
   userController.updateUser
 );
 
-//dashboard route
-router.get("/dashboard", authorization, userController.getDashboard);
+router.delete(
+  "/userDelete",
+  authorization.authorization,
+  userController.deleteUser
+);
 
-//change user password
-router.post("/changePassword", authorization, userController.changePassword);
+router.post("/userFollow", authorization.authorization, userController.follow);
+
+router.post(
+  "/userUnfollow",
+  authorization.authorization,
+  userController.unfollow
+);
+
+router.post(
+  "/userDetailUpdate",
+  authorization.authorization,
+  userController.updateUser
+);
+
+router.post(
+  "/postAdd",
+  authorization.authorization,
+  authorization.uploadPost.single("post"),
+  userController.addPost
+);
+
+router.post("/postLike", authorization.authorization, userController.likePost);
+
+router.post(
+  "/postDislike",
+  authorization.authorization,
+  userController.dislikePost
+);
+
+router.patch(
+  "/postUpdate",
+  authorization.authorization,
+  userController.updatePost
+);
+
+router.delete(
+  "/postDelete",
+  authorization.authorization,
+  userController.deletePost
+);
+
+router.get("/postsGet", userController.getPosts);
 
 module.exports = router;

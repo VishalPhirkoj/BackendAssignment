@@ -9,6 +9,16 @@ app.use(express.urlencoded({ extended: true }));
 
 dotenv.config();
 
+// const obj = {
+//   name: "vishal",
+//   age: 13,
+// };
+// const obj2 = obj;
+
+// obj2.age = 15;
+// console.log(obj2);
+// console.log(obj);
+
 app.use("/user", require("./routes/user.route"));
 
 // app.get("/", (req, res) => {
