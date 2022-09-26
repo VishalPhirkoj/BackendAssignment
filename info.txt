@@ -1,0 +1,42 @@
+github link:
+https://github.com/VishalPhirkoj/BackendAssignment
+
+1. for add user -- POST
+http://localhost:4000/user/userAdd
+
+2. for login user -- POST
+http://localhost:4000/user/userLogin
+
+3. get user detail --GET
+http://localhost:4000/user/userDetail
+
+4. update user --PATCH
+http://localhost:4000/user/userUpdate
+
+5. delete user --DELETE
+http://localhost:4000/user/userDelete
+
+6. follow user -- POST
+http://localhost:4000/user/userFollow
+
+7. unfollow user -- POST
+http://localhost:4000/user/userUnfollow
+
+8. AddPost -- POST
+http://localhost:4000/user/postAdd
+
+9. Like Post -- POST
+http://localhost:4000/user/postLike
+
+10. unlike post -- POST
+http://localhost:4000/user/postDislike
+
+11. delete post --DELETE
+http://localhost:4000/user/postDelete
+
+12. update post --PATCH
+http://localhost:4000/user/postUpdate
+
+13. get all posts with pagination --GET
+http://localhost:4000/user/postsGet
+
